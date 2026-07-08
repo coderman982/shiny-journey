@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Posts API Tester</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; }
+    body { font-family: system-ui, sans-serif; padding: 2rem; max-width: 800px; margin: 0 auto; background: #f5f5f5; }
+    h1 { margin-bottom: 1rem; }
+    section { background: #fff; padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    h2 { margin-bottom: 0.75rem; font-size: 1.1rem; }
+    input, textarea { display: block; width: 100%; margin-bottom: 0.5rem; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.95rem; }
+    textarea { min-height: 80px; resize: vertical; }
+    button { padding: 0.5rem 1.5rem; background: #0066cc; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 0.95rem; }
+    button:hover { background: #0052a3; }
+    button.danger { background: #cc3300; }
+    button.danger:hover { background: #a32900; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 1rem; border-radius: 4px; overflow-x: auto; margin-top: 0.75rem; font-size: 0.85rem; white-space: pre-wrap; }
+    .row { display: flex; gap: 0.5rem; align-items: flex-end; }
+    .row > * { flex: 1; }
+    .row button { flex: 0 0 auto; }
+    .post-item { padding: 0.75rem; border: 1px solid #e0e0e0; border-radius: 4px; margin-bottom: 0.5rem; }
+    .post-item strong { font-size: 1.05rem; }
+    .post-item small { color: #666; }
+    .badge { display: inline-block; background: #e0e0e0; padding: 2px 8px; border-radius: 10px; font-size: 0.8rem; margin-left: 0.5rem; }
+    .flash { animation: flash 0.5s ease; }
+    @keyframes flash { 0% { background: #d4edda; } 100% { background: transparent; } }
+  </style>
+</head>
+<body>
+  <h1>📝 Posts API Tester</h1>
+
+  <section id="create-section">
+    <h2>Create Post</h2>
+    <input id="create-title" placeholder="Title" />
+    <textarea id="create-content" placeholder="Content"></textarea>
+    <button onclick="createPost()">Create</button>
+  </section>
+
+  <section id="list-section">
+    <h2>All Posts</h2>
+    <button onclick="listPosts()">Refresh</button>
+    <div id="post-list"></div>
+  </section>
+
+  <section id="detail-section">
+    <h2>Get / View Post</h2>
+    <div class="row">
+      <input id="detail-id" placeholder="Post ID" />
+      <button onclick="getPost()">Get</button>
+      <button class="danger" onclick="recordView()">Record View</button>
+    </div>
+    <pre id="detail-result">Click "Get" to see a post</pre>
+  </section>
+
+  <pre id="log">Ready.</pre>
+
+  <script>
+    const API = '/api/posts';
+
+    async function api(method, path, body) {
+      const opts = { method, headers: { 'Content-Type': 'application/json' } };
+      if (body) opts.body = JSON.stringify(body);
+      const res = await fetch(`${API}${path}`, opts);
+      const data = await res.json();
+      log(`${method} ${path} → ${res.status}`, data);
+      return { ok: res.ok, status: res.status, data };
+    }
+
+    function log(msg, data) {
+      const el = document.getElementById('log');
+      el.textContent = `${msg}\n${data ? JSON.stringify(data, null, 2) : ''}\n\n${el.textContent}`;
+    }
+
+    async function createPost() {
+      const title = document.getElementById('create-title').value;
+      const content = document.getElementById('create-content').value;
+      if (!title || !content) return alert('Title and content required');
+      const { ok } = await api('POST', '/', { title, content });
+      if (ok) { document.getElementById('create-title').value = ''; document.getElementById('create-content').value = ''; }
+      await listPosts();
+    }
+
+    async function listPosts() {
+      const { data } = await api('GET', '/');
+      const container = document.getElementById('post-list');
+      if (!Array.isArray(data)) { container.innerHTML = '<em>No posts yet</em>'; return; }
+      container.innerHTML = data.map(p => `
+        <div class="post-item" onclick="document.getElementById('detail-id').value='${p.id}'; getPost()">
+          <strong>${esc(p.title)}</strong>
+          <span class="badge">${p.view_count ?? 0} views</span>
+          <br/><small>${esc(p.content || '').slice(0, 120)}</small>
+        </div>
+      `).join('');
+    }
+
+    async function getPost() {
+      const id = document.getElementById('detail-id').value;
+      if (!id) return alert('Enter a post ID');
+      const { data } = await api('GET', `/${id}`);
+      document.getElementById('detail-result').textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function recordView() {
+      const id = document.getElementById('detail-id').value;
+      if (!id) return alert('Enter a post ID');
+      const { data } = await api('POST', `/${id}/view`);
+      document.getElementById('detail-result').textContent = JSON.stringify(data, null, 2);
+      await listPosts();
+    }
+
+    function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+    listPosts();
+  </script>
+</body>
+</html>
